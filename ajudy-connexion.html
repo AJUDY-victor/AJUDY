@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AJUDY - Connexion</title>
+<style>
+  :root { --bleu:#1d5fd1; --fond:#f3f6fb; --texte:#14213d; --gris:#5b6475; --rouge:#b3261e; --vert:#1b7f3b; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;
+         background:var(--fond); color:var(--texte); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { width:100%; max-width:380px; background:#fff; border-radius:16px; padding:28px 22px; box-shadow:0 2px 14px rgba(20,33,61,.08); }
+  .logo { width:84px; height:84px; margin:0 auto 10px; border-radius:50%; background:var(--bleu); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; }
+  .logo i { display:block; height:5px; border-radius:3px; background:#fff; }
+  .logo i:nth-child(1){ width:38px } .logo i:nth-child(2){ width:30px } .logo i:nth-child(3){ width:34px }
+  h1 { text-align:center; margin:0; font-size:26px; letter-spacing:.04em; }
+  .sous { text-align:center; margin:2px 0 22px; color:var(--gris); font-size:14px; }
+  label { display:block; font-size:15px; margin:14px 0 6px; font-weight:600; }
+  input { width:100%; padding:14px; font-size:17px; border:1.5px solid #c9d1e0; border-radius:10px; }
+  input:focus { outline:3px solid #b9d0f7; border-color:var(--bleu); }
+  button { width:100%; margin-top:22px; padding:15px; font-size:18px; font-weight:700; color:#fff; background:var(--bleu); border:0; border-radius:10px; }
+  button:disabled { opacity:.6; }
+  #msg { margin-top:16px; padding:12px; border-radius:10px; font-size:15px; line-height:1.4; display:none; }
+  #msg.err { display:block; background:#fdecea; color:var(--rouge); }
+  #msg.ok { display:block; background:#e6f4ea; color:var(--vert); }
+  #msg.info { display:block; background:#eaf0fb; color:var(--bleu); }
+  #fiche { margin-top:10px; font-size:15px; line-height:1.7; }
+  #fiche b { display:inline-block; min-width:92px; color:var(--gris); font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+  <div class="logo" aria-hidden="true"><i></i><i></i><i></i></div>
+  <h1>AJUDY</h1>
+  <p class="sous">Connectez-vous à votre compte</p>
+
+  <label for="email">Adresse Gmail</label>
+  <input id="email" type="email" autocomplete="email" inputmode="email" placeholder="exemple@gmail.com">
+
+  <label for="mdp">Mot de passe</label>
+  <input id="mdp" type="password" autocomplete="current-password" placeholder="Votre mot de passe">
+
+  <button id="btn" type="button">Se connecter</button>
+  <div id="msg" role="status"></div>
+  <div id="fiche"></div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  var config = {
+    apiKey: "AIzaSyAkrUvVoRd7C2mBlimO3cWfbuBfvzNQ9Gc",
+    authDomain: "ajudy-22327.firebaseapp.com",
+    projectId: "ajudy-22327",
+    storageBucket: "ajudy-22327.firebasestorage.app",
+    messagingSenderId: "927667970511",
+    appId: "1:927667970511:web:f7ffbae9ee51caf3f832ba"
+  };
+
+  var msg = document.getElementById("msg");
+  var btn = document.getElementById("btn");
+  var fiche = document.getElementById("fiche");
+
+  function afficher(type, texte) { msg.className = type; msg.textContent = texte; }
+  function attendre(promesse, secondes, nom) {
+    return Promise.race([
+      promesse,
+      new Promise(function (_, refuse) {
+        setTimeout(function () { refuse({ code: "delai/" + nom }); }, secondes * 1000);
+      })
+    ]);
+  }
+  function erreurLisible(e) {
+    var c = (e && e.code) || "";
+    if (c === "auth/invalid-credential" || c === "auth/wrong-password" || c === "auth/user-not-found" || c === "auth/invalid-login-credentials")
+      return "Adresse Gmail ou mot de passe incorrect.";
+    if (c === "auth/invalid-email") return "L'adresse Gmail n'est pas valide.";
+    if (c === "auth/too-many-requests") return "Trop d'essais. Attendez quelques minutes puis réessayez.";
+    if (c === "auth/network-request-failed") return "Pas de connexion internet. Vérifiez votre réseau.";
+    if (c === "delai/connexion") return "La connexion met trop de temps. Vérifiez internet, puis réessayez.";
+    if (c === "delai/fiche") return "Connecté, mais la fiche ne s'affiche pas (délai dépassé).";
+    return "Erreur : " + (c || (e && e.message) || "inconnue") + ". Envoyez-moi une capture de ce message.";
+  }
+
+  var auth, db;
+  if (typeof firebase === "undefined") {
+    afficher("err", "Firebase ne s'est pas chargé. Vérifiez internet, puis rouvrez cette page.");
+    btn.disabled = true;
+  } else {
+    firebase.initializeApp(config);
+    auth = firebase.auth();
+    db = firebase.firestore();
+  }
+
+  async function seConnecter() {
+    var email = document.getElementById("email").value.trim();
+    var mdp = document.getElementById("mdp").value;
+    fiche.innerHTML = "";
+    if (!email || !mdp) { afficher("err", "Remplissez votre Gmail et votre mot de passe."); return; }
+
+    btn.disabled = true;
+    afficher("info", "Connexion en cours…");
+    try {
+      // Évite le blocage du stockage local quand le fichier est ouvert depuis Téléchargements
+      try { await auth.setPersistence(firebase.auth.Auth.Persistence.NONE); } catch (x) {}
+
+      var res = await attendre(auth.signInWithEmailAndPassword(email, mdp), 15, "connexion");
+      afficher("ok", "Connexion réussie.");
+
+      try {
+        var doc = await attendre(db.collection("utilisateurs").doc(res.user.uid).get(), 8, "fiche");
+        if (doc.exists) {
+          var d = doc.data();
+          fiche.innerHTML =
+            "<div><b>Prénom</b>" + (d.prenom || "-") + "</div>" +
+            "<div><b>Nom</b>" + (d.nom || "-") + "</div>" +
+            "<div><b>Statut</b>" + (d.statut || "-") + "</div>" +
+            "<div><b>Abonnement</b>" + (d.abonnement || "-") + "</div>";
+        } else {
+          afficher("ok", "Connexion réussie. Aucune fiche trouvée pour ce compte.");
+        }
+      } catch (e2) {
+        afficher("ok", "Connexion réussie. " + erreurLisible(e2));
+      }
+    } catch (e) {
+      afficher("err", erreurLisible(e));
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  btn.addEventListener("click", seConnecter);
+</script>
+</body>
+</html>
