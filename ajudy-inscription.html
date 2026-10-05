@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AJUDY – Inscription</title>
+<style>
+:root{--bleu:#1d5fc4;--fond:#f5f8fd;--texte:#16223a;--gris:#5b6b85;--ok:#17703a;--err:#b3261e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fond);color:var(--texte);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+main{max-width:440px;margin:0 auto;padding:28px 20px 48px}
+.logo{display:flex;flex-direction:column;align-items:center;margin-bottom:20px}
+.logo small{color:var(--gris);font-size:.85rem}
+.logo b{font-size:1.5rem;letter-spacing:.06em;color:var(--bleu)}
+h1{font-size:1.35rem;margin:0 0 4px}
+p.sous{margin:0 0 18px;color:var(--gris)}
+label{display:block;font-weight:600;margin:14px 0 4px}
+input{width:100%;padding:13px 12px;font-size:1rem;border:1.5px solid #c3cee0;border-radius:10px;background:#fff;color:var(--texte)}
+input:focus{outline:3px solid #9bbcf0;border-color:var(--bleu)}
+button{width:100%;margin-top:22px;padding:14px;font-size:1.05rem;font-weight:700;color:#fff;background:var(--bleu);border:0;border-radius:10px}
+button:disabled{opacity:.6}
+#etat{margin-top:20px;padding:14px;border-radius:10px;background:#fff;border:1.5px solid #c3cee0;display:none;white-space:pre-line}
+#etat.ok{border-color:var(--ok);color:var(--ok)}
+#etat.err{border-color:var(--err);color:var(--err)}
+</style>
+</head>
+<body>
+<main>
+  <div class="logo">
+    <svg width="72" height="72" viewBox="0 0 72 72" role="img" aria-label="Logo AJUDY">
+      <circle cx="36" cy="36" r="36" fill="#1d5fc4"/>
+      <g fill="#fff"><circle cx="22" cy="26" r="3"/><circle cx="22" cy="36" r="3"/><circle cx="22" cy="46" r="3"/>
+      <rect x="30" y="24" width="20" height="4" rx="2"/><rect x="30" y="34" width="20" height="4" rx="2"/><rect x="30" y="44" width="14" height="4" rx="2"/></g>
+    </svg>
+    <b>AJUDY</b>
+    <small>organisation AJUDY</small>
+  </div>
+
+  <h1>Créer votre compte</h1>
+  <p class="sous">Tous les champs sont obligatoires.</p>
+
+  <form id="f" novalidate>
+    <label for="nom">Nom</label>
+    <input id="nom" autocomplete="family-name" required>
+    <label for="prenom">Prénom</label>
+    <input id="prenom" autocomplete="given-name" required>
+    <label for="gmail">Adresse Gmail</label>
+    <input id="gmail" type="email" inputmode="email" autocomplete="email" required>
+    <label for="tel">Numéro de téléphone</label>
+    <input id="tel" type="tel" inputmode="tel" autocomplete="tel" required>
+    <label for="mdp">Mot de passe (6 caractères minimum)</label>
+    <input id="mdp" type="password" autocomplete="new-password" required>
+    <button id="btn" type="submit">Créer mon compte</button>
+  </form>
+
+  <div id="etat" role="status" aria-live="polite"></div>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { initializeAuth, inMemoryPersistence, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAkrUvVoRd7C2mBlimO3cWfbuBfvzNQ9Gc",
+  authDomain: "ajudy-22327.firebaseapp.com",
+  projectId: "ajudy-22327",
+  storageBucket: "ajudy-22327.firebasestorage.app",
+  messagingSenderId: "927667970511",
+  appId: "1:927667970511:web:f7ffbae9ee51caf3f832ba"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = initializeAuth(app, { persistence: inMemoryPersistence });
+const db = getFirestore(app);
+
+const $ = id => document.getElementById(id);
+const etat = $("etat");
+function avecDelai(promesse, ms = 20000){
+  return Promise.race([
+    promesse,
+    new Promise((_, rejet) => setTimeout(() => rejet({code:"delai-depasse", message:"Aucune réponse de Firebase après 20 secondes."}), ms))
+  ]);
+}
+function afficher(texte, type){ etat.style.display="block"; etat.className=type||""; etat.textContent=texte; }
+
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const nom=$("nom").value.trim(), prenom=$("prenom").value.trim(),
+        gmail=$("gmail").value.trim(), tel=$("tel").value.trim(), mdp=$("mdp").value;
+
+  if(!nom||!prenom||!gmail||!tel||!mdp){ afficher("Remplissez tous les champs.","err"); return; }
+  if(mdp.length<6){ afficher("Le mot de passe doit contenir au moins 6 caractères.","err"); return; }
+
+  $("btn").disabled = true;
+  let etape = "création du compte";
+  try{
+    afficher("Étape 1 sur 2 : création du compte…");
+    const cred = await avecDelai(createUserWithEmailAndPassword(auth, gmail, mdp));
+
+    etape = "enregistrement de la fiche";
+    afficher("Étape 2 sur 2 : enregistrement de la fiche…");
+    const code = String(Math.floor(100000 + Math.random()*900000));
+    await avecDelai(setDoc(doc(db, "utilisateurs", cred.user.uid), {
+      nom, prenom, gmail, telephone: tel,
+      codeConfirmation: code,
+      statut: "en attente",
+      abonnement: "gratuit",
+      dateCreation: serverTimestamp()
+    }));
+
+    afficher("Compte créé et fiche enregistrée dans Firestore.\nCode de confirmation (test) : " + code, "ok");
+    $("f").reset();
+  }catch(err){
+    let msg = "Échec à l'étape « " + etape + " ».\n";
+    if(err.code==="auth/email-already-in-use") msg += "Cette adresse Gmail a déjà un compte. Utilisez une autre adresse pour ce test.";
+    else if(err.code==="auth/invalid-email") msg += "L'adresse Gmail n'est pas valide.";
+    else if(err.code==="auth/weak-password") msg += "Mot de passe trop faible.";
+    else if(err.code==="delai-depasse") msg += "Firebase n'a pas répondu en 20 secondes. Vérifiez votre connexion internet, puis réessayez. Si l'étape était « enregistrement de la fiche », le compte existe déjà : utilisez une autre adresse.";
+    else msg += "Code d'erreur : " + (err.code||"inconnu") + "\n" + (err.message||"");
+    afficher(msg,"err");
+  }finally{
+    $("btn").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
