@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AJUDY - Comptes-rendus</title>
+<style>body{font-family:Arial,sans-serif;margin:0;background:#f4f7fb;color:#222}header{background:#1a73e8;color:#fff;padding:16px;text-align:center;font-size:20px}main{padding:12px}.carte{background:#fff;border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 1px 4px #0002}.carte img{width:100%;border-radius:8px;margin-top:8px}.btns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.btns button{flex:1;padding:12px;border:0;border-radius:8px;color:#fff;font-size:16px}.wa{background:#25d366}.fb{background:#1877f2}.pl{background:#555}</style></head>
+<body><header>AJUDY – Comptes-rendus</header><main id="liste">Chargement...</main>
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import{getFirestore,collection,getDocs}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const app=initializeApp({apiKey:"AIzaSyAkrUvVoRd7C2mBlimO3cWfbuBfvzNQ9Gc",authDomain:"ajudy-22327.firebaseapp.com",projectId:"ajudy-22327",storageBucket:"ajudy-22327.firebasestorage.app",messagingSenderId:"927667970511",appId:"1:927667970511:web:f7ffbae9ee51caf3f832ba"});
+const db=getFirestore(app);
+const liste=document.getElementById("liste");
+function partager(type,texte){
+const msg="Compte-rendu AJUDY : "+texte.slice(0,300);
+const url=location.href;
+if(type==="wa")open("https://wa.me/?text="+encodeURIComponent(msg+" "+url),"_blank");
+else if(type==="fb")open("https://www.facebook.com/sharer/sharer.php?u="+encodeURIComponent(url)+"&quote="+encodeURIComponent(msg),"_blank");
+else if(navigator.share)navigator.share({title:"AJUDY",text:msg,url:url});
+else alert("Partage non disponible");
+}
+try{
+const snap=await getDocs(collection(db,"comptesrendus"));
+liste.textContent="";
+if(snap.empty)liste.textContent="Aucun compte-rendu.";
+snap.forEach(doc=>{
+const d=doc.data();
+const texte=d.texte||d.contenu||"";
+const c=document.createElement("div");c.className="carte";
+const p=document.createElement("p");p.textContent=texte;c.appendChild(p);
+(d.photos||[]).forEach(src=>{const i=document.createElement("img");i.src=src;c.appendChild(i);});
+const b=document.createElement("div");b.className="btns";
+[["wa","WhatsApp"],["fb","Facebook"],["pl","Partager"]].forEach(([t,n])=>{
+const x=document.createElement("button");x.className=t;x.textContent=n;x.onclick=()=>partager(t,texte);b.appendChild(x);
+});
+c.appendChild(b);liste.appendChild(c);
+});
+}catch(e){liste.textContent="Erreur : "+e.message;}
+</script></body></html>
